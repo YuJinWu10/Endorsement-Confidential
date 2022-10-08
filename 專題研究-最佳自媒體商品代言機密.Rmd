@@ -1,0 +1,883 @@
+---
+title: "最佳自媒體商品代言機密"
+author: "Yu-Jin Wu"
+date: "2022/6/1"
+output: 
+  html_document: default
+  powerpoint_presentation: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+  
+### **研究動機**
+
+ 在這網絡蓬勃發展的世代，社群軟體早已與我們的生活密不可分，每個人幾乎都有手機或是電腦，而Instagram在年輕人之間使用率非常高，店家與廠商找Instagram上的網紅發宣傳圖文的狀況越來越普及，如何以數據找出最高性價比的代言人，對於想節省成本的賣家或是剛起步的創業者來說是很重要的課題。在這國際化的社會，想要產品銷往國外，在統計分析「各個國家經濟發展的程度」、「網路普及率」的課題上也有其重要性。
+
+
+### **研究目的**
+ 許多賣家會認為找越高知名度的明星來代言商品或是拍廣告會得到越好的成效，但在這社群軟體活躍的時代，有時候找代言費更低的網紅或許效益會更佳。此研究就是在討論如何取得宣傳成本與宣傳成效之間的平衡，對於剛起步的創業者或是小公司的優質商品，除了可以節省宣傳成本以外，還可以讓他們的曝光度跟大公司不相上下，對於消費者來說也可以看到更多不同的選擇，找到更適合自己的產品。
+
+
+
+****
+
+### **數據來源**
+
+- [Top 1000 Instagram Influencers](https://www.kaggle.com/datasets/prasertk/top-1000-instagram-influencers)(2022.01)
+
+
+### **焦點問題**
+
+
+- 選擇哪些演員類別的網紅來做商業代演，CP值比較高?
+
+-	如何選出高CP值
+
+
+### **分析變量**
+- 排名
+- 用戶名稱
+- 用戶類別
+- 追蹤人數
+- 觀眾國家(用戶市場)
+- 互動人數
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(tidytext)
+library(dplyr)
+library(stringr)
+library(tm)
+library(SnowballC)
+library(RColorBrewer)
+library(openxlsx)
+library(geomtextpath)
+library(ggplot2)
+library(smacof)
+library(magrittr)
+library(ggpubr)
+library(MASS)
+library(knitr)
+library(kableExtra)
+library(lubridate)
+library(vegan)
+library(caret)
+library(mltools)
+library(VennDiagram)
+library(proxy)
+library(highcharter)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+ig.nox_data <- read.xlsx("C:/Users/user/Desktop/畢業專題/instagram.noxfluencer1.xlsx")
+```
+
+#### 原始資料(僅以部份表示)
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+data <- ig.nox_data[c(1:5),c(2,3,6,7,8,9)]
+kbl(data,align = "l") %>%
+  kable_paper() %>%
+  kable_classic(full_width = T) %>%
+  kable_styling(font_size = 16)
+```
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+#將數值取對數到小數點後兩位
+ig.no <- c()
+ig.no <- cbind(ig.no,ig.nox_data$Rank)
+ig.no <- cbind(ig.no,ig.nox_data$Account)
+ig.no <- cbind(ig.no,ig.nox_data$Category)
+ig.no <- cbind(ig.no,ig.nox_data$Category)
+ig.no <- cbind(ig.no,sprintf("%4.2f",log(ig.nox_data$Followers)))
+ig.no <- cbind(ig.no,sprintf("%4.1f",log(ig.nox_data$Followers)))
+ig.no <- cbind(ig.no,ig.nox_data$Audience.Country)
+ig.no <- cbind(ig.no,ig.nox_data$Audience.Country)
+ig.no <- cbind(ig.no,ig.nox_data$Audience.Country)
+ig.no <- cbind(ig.no,ig.nox_data$Audience.Country)
+ig.no <- cbind(ig.no,sprintf("%4.2f",log(ig.nox_data$Authentic.engagement)))
+ig.no <- cbind(ig.no,sprintf("%4.1f",log(ig.nox_data$Authentic.engagement)))
+ig.no <- cbind(ig.no,sprintf("%4.2f",log(ig.nox_data$Engagement.avg)))
+colnames(ig.no) <- c("Rank","Account","Category","CategoryGroup","Followers-log","Followers1","Audience.Country","Ac.Continents","Ac.internet","Ac.HDI","Authentic.engagement-log","Authentic.engagement1","Engagement.avg")
+ig.no <- as.data.frame(ig.no)
+```
+
+==================================================================================================================================================================================================================================================================================================
+
+
+## **資料處理**
+ 將觀眾國家依地理位置(洲) 、國家網路普及程度、人類發展指數做區分；因為資料較為複雜，無法直接繪圖或分析，故我將用戶類別做分割並使用MDS及K-means分群，再做分析。
+
+***
+
+### **觀眾國家(用戶市場)**
+
+* 依地理位置(洲)區分
+* 依國家網路普及程度區分
+* 依人類發展指數區分
+
+
+#### - 以地理位置(洲)來區分觀眾國家
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+#北美
+ig.no$Ac.Continents <- gsub("United States","North-America",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("Mexico","North-America",ig.no$Ac.Continents)
+
+#南美
+ig.no$Ac.Continents <- gsub("Colombia","South-America",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("Chile","South-America",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("Brazil","South-America",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("Argentina","South-America",ig.no$Ac.Continents)
+
+#亞洲
+ig.no$Ac.Continents <- gsub("Japan","Asia",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("South Korea","Asia",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("China","Asia",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("Philippines","Asia",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("Thailand","Asia",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("India","Asia",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("Iran","Asia",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("Kazakhstan","Asia",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("Russia","Asia",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("Iraq","Asia",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("Saudi Arabia","Asia",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("Syria","Asia",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("United Arab Emirates","Asia",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("Turkey","Asia",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("Indonesia","Asia",ig.no$Ac.Continents)
+
+#歐洲
+ig.no$Ac.Continents <- gsub("Italy","European",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("Spain","European",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("United Kingdom","European",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("France","European",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("Germany","European",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("Poland","European",ig.no$Ac.Continents)
+
+#非洲
+ig.no$Ac.Continents <- gsub("Egypt","Africa",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("Nigeria","Africa",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("Morocco","Africa",ig.no$Ac.Continents)
+ig.no$Ac.Continents <- gsub("Algeria","Africa",ig.no$Ac.Continents)
+```
+
+****
+
+#### - 以國家網路普及程度區分觀眾國家
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+#90%-100%
+ig.no$Ac.internet <- gsub("United States","90%-100%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("South Korea","90%-100%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("United Kingdom","90%-100%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("Japan","90%-100%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("Spain","90%-100%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("France","90%-100%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("Germany","90%-100%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("Saudi Arabia","90%-100%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("United Arab Emirates","90%-100%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("Chile","90%-100%",ig.no$Ac.internet)
+
+#80%-89%
+ig.no$Ac.internet <- gsub("Argentina","80%-89%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("Russia","80%-89%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("Italy","80%-89%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("Poland","80%-89%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("Kazakhstan","80%-89%",ig.no$Ac.internet)
+
+#70%-79%
+ig.no$Ac.internet <- gsub("Mexico","70%-79%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("Brazil","70%-79%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("Turkey","70%-79%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("Indonesia","70%-79%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("Morocco","70%-79%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("Iran","70%-79%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("Algeria","70%-79%",ig.no$Ac.internet)
+
+#60%-69%
+ig.no$Ac.internet <- gsub("Colombia","60%-69%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("China","60%-69%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("Philippines","60%-69%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("Thailand","60%-69%",ig.no$Ac.internet)
+
+#0%-59%
+ig.no$Ac.internet <- gsub("India","0%-59%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("Egypt","0%-59%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("Nigeria","0%-59%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("Iraq","0%-59%",ig.no$Ac.internet)
+ig.no$Ac.internet <- gsub("Syria","0%-59%",ig.no$Ac.internet)
+```
+
+****
+
+#### - 以人類發展指數區分觀眾國家
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+#極高人類發展指數(Very High HDI)
+ig.no$Ac.HDI <- gsub("United States","Very High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("South Korea","Very High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("United Kingdom","Very High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("Japan","Very High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("Germany","Very High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("Spain","Very High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("France","Very High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("Italy","Very High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("Poland","Very High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("Chile","Very High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("France","Very High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("Argentina","Very High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("Russia","Very High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("Turkey","Very High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("Saudi Arabia","Very High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("United Arab Emirates","Very High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("Kazakhstan","Very High HDI",ig.no$Ac.HDI)
+
+#高人類發展指數(High HDI)
+ig.no$Ac.HDI <- gsub("Iran","High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("Mexico","High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("Brazil","High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("China","High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("Philippines","High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("Thailand","High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("Indonesia","High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("Colombia","High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("Algeria","High HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("Egypt","High HDI",ig.no$Ac.HDI)
+
+#中人類發展指數(Medium HDI)
+ig.no$Ac.HDI <- gsub("Morocco","Medium HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("India","Medium HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("Iraq","Medium HDI",ig.no$Ac.HDI)
+ig.no$Ac.HDI <- gsub("Syria","Medium HDI",ig.no$Ac.HDI)
+
+#低人類發展指數(Low HDI)
+ig.no$Ac.HDI <- gsub("Nigeria","Low HDI",ig.no$Ac.HDI)
+```
+
+****
+
+### **類別**
+
+* 將用戶多個類別拆開
+* 使用One-hot encoding做用戶及類別的矩陣
+* 使用MDS及K-means分群
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+lappend <- function (lst, ...){
+lst <- c(lst, list(...))
+  return(lst)
+}
+```
+
+#### 將用戶多個類別拆開
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+Categorya <- as.data.frame(ig.no$Category)
+
+for(i in 1:nrow(Categorya)){
+  Categorya[i,]=as.character(Categorya[i,])
+}
+
+Categorya <- cbind(matrix(c(1:1000),nrow=1000,ncol=1),Categorya)
+
+colnames(Categorya) <- c("Numb","word")
+
+account <- ig.no$Account
+nop <- Categorya$Numb
+```
+
+#### 分割
+```{r}
+Categorya <- Categorya %>% 
+  unnest_tokens(CategoryGroup,word,token =function(t) str_split(t,"[;]"),to_lower = FALSE)
+```
+
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+cat_list = list()
+
+for(i in nop){
+  pr = subset(Categorya, Numb==i)[2]
+  cat_list = lappend(cat_list, pr)
+  pr = c()
+}
+```
+
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+categoryd = c()
+
+for(i in 1:nrow(Categorya)){
+  cat = unlist(cat_list[i])
+  categoryd = union(categoryd, cat)
+  cat = c()
+}
+categoryd <- as.data.frame(categoryd)[-9,]
+
+```
+***
+
+
+#### 使用One-hot encoding做用戶及類別的矩陣(僅以部份表示)
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+n1=length(account)
+n2=length(categoryd)
+cm  <-  matrix(0, nrow = n1, ncol = n2)
+for(cat in 1:n2){
+  for(i in 1:length(nop)){
+    if(grepl(categoryd[cat], cat_list[[i]])==TRUE){
+      cm[i, cat]=1
+    }
+  }
+}
+rownames(cm) = account
+colnames(cm) = categoryd
+cm = as.data.frame(cm)
+cmt=t(cm)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+cmtt <- cmt[c(1:7),c(1:5)]
+kbl(cmtt,align = "l") %>%
+  kable_paper() %>%
+  kable_classic(full_width = T) %>%
+  kable_styling(font_size = 16)
+```
+
+****
+
+
+****
+#### 計算 MDS
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+mds <- cmt %>%
+  dist(cmt, method="jaccard") %>%          
+  cmdscale() %>%
+  as_tibble()
+colnames(mds) <- c("Dim.1", "Dim.2")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+mds_high = cbind(mds, categoryd)
+colnames(mds_high)=c("v1", "v2", "label")
+hchart(mds_high, "scatter", hcaes(x=v1, y=v2, group=label),main="MDS of categories")
+```
+
+
+****
+#### 使用K-means 分群
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+clust <- kmeans(mds,5)$cluster %>%
+  as.factor()
+mds <- mds %>%
+  mutate(groups = clust)
+# Plot and color by groups
+ggscatter(mds, x = "Dim.1", y = "Dim.2", 
+          label = rownames(cmt),
+          color = "groups",
+          palette = "jco",
+          size = 5, 
+          ellipse = TRUE,
+          ellipse.type = "convex",
+          repel = TRUE)
+
+categoryd <- as.data.frame(categoryd)
+catecom <- c()
+catecom <- cbind(catecom, categoryd$categoryd)
+catecom <- cbind(catecom, clust)
+colnames(catecom) <- c("category","group")
+
+```
+
+
+****
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+ig.no$CategoryGroup<- gsub("Computers","A",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Gadgets","A",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Machinery","A",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Technologies","A",ig.no$CategoryGroup)
+
+ig.no$CategoryGroup<- gsub("Finance","B",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Economics","B",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Business","B",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Careers","B",ig.no$CategoryGroup)
+
+ig.no$CategoryGroup<- gsub("Humor","D",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Fun","D",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Happiness","D",ig.no$CategoryGroup)
+
+ig.no$CategoryGroup<- gsub("Luxury","E",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Cars","E",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Motorbikes","E",ig.no$CategoryGroup)
+
+ig.no$CategoryGroup<- gsub("Shows","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Modeling","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Cinema or Actors or actresses","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Fitness","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Gym","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Photography","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Literature","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Journalism","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Racing","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Nature  landscapes","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Trainers","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Coaches","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Science","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Travel","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Sports with a ball","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Fashion","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Beauty","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Artists","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Art","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Accessories","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Jewellery","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Family","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Clothing","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Outfits","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Shopping","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Retail","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Kids","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Toys","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("D I Y","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Design","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Music","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Lifestyle","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Sports","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Food","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Cooking","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Management","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Marketing","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Adult content","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Comics  sketches","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Animals","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Extreme","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("Outdoor activity","C",ig.no$CategoryGroup)
+
+#調整
+ig.no$CategoryGroup<- gsub("E;E;E","E",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("E;E","E",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("D;D;D","D",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("C;C;C;C;C;C","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("C;C;C;C;C","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("C;C;C;C","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("C;C;C","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("C;C","C",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("B;B;B;B","B",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("B;B","B",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("A;A;A;A","A",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("A;A","A",ig.no$CategoryGroup)
+ig.no$CategoryGroup<- gsub("C;D;C","C;D",ig.no$CategoryGroup)
+```
+
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+#write.csv(ig.no,"C:/Users/user/Desktop/畢業專題/ig.nox.csv")
+```
+
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+ig.nox <- read.csv("C:/Users/user/Desktop/畢業專題/ig.nox.csv")
+```
+
+
+#### 整理後的資料(僅以部份表示)
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+mdata <- ig.nox[c(137,718,45,455,2),c(2,3,4,5,6,8,9,10,11,12)]
+kbl(mdata,align = "l") %>%
+  kable_paper() %>%
+  kable_classic(full_width = T) %>%
+  kable_styling(font_size = 16)
+```
+
+==================================================================================================================================================================================================================================================================================================
+
+## **資料分析**
+
+我使用hchart來繪圖，可以知道相對應的用戶是誰，並找出最佳人選。
+
+### hchart圖
+
+#### - 追蹤人數 v.s. 互動人數
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+hchart(ig.nox, "scatter", hcaes(x=Followers.log, y=Authentic.engagement.log, group=Audience.Country),main="Followers(log) to Authentic.engagement(log) by audience's countries")
+```
+
+****
+****
+
+#### 追蹤人數前五名
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+Follower <- ig.nox[c(29,1,2,3,5),c(4,5,8,10,14)]
+kbl(Follower,align = "l") %>%
+  kable_paper() %>%
+  kable_classic(full_width = T) %>%
+  kable_styling(font_size = 16)
+```
+
+****
+****
+
+#### 互動人數前五名
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+Authentic <- ig.nox[c(16,26,27,21,32),c(4,5,8,10,14)]
+kbl(Authentic,align = "l") %>%
+  kable_paper() %>%
+  kable_classic(full_width = T) %>%
+  kable_styling(font_size = 16)
+```
+
+****
+****
+
+#### 原資料前五名
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+Rankk <- ig.nox[c(1,2,3,4,5),c(3,4,5,8,10,14)]
+kbl(Rankk,align = "l") %>%
+  kable_paper() %>%
+  kable_classic(full_width = T) %>%
+  kable_styling(font_size = 16)
+```
+
+****
+****
+
+#### 觀眾國家排名
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+Auc <- ig.nox$Audience.Country
+
+Auc <- as.data.frame(Auc)
+
+Auc$Auc <- gsub(" ","-",Auc$Auc)
+
+for(i in 1:nrow(Auc)){
+  Auc[i,]=as.character(Auc[i,])
+}
+
+Auc <- cbind(matrix(c(1:1000),nrow=1000,ncol=1),Auc)
+
+colnames(Auc) <- c("No","Auc1")
+
+#數個數
+Auc_count=Auc%>% 
+  filter(nchar(Auc$Auc1)>1) %>%
+  group_by(Auc1) %>% 
+  summarise(sum = n()) %>% 
+  filter(sum>0) %>%
+  arrange(desc(sum))
+
+#繪長條圖+%數+字
+Auc_count %>%
+  mutate(perc = paste0(sprintf("%4.1f", sum / sum(sum)*100),"%"),Auc1 = reorder(Auc1, sum), perc = if_else(row_number()==1,paste(perc,"of all Audience.Country"),perc)) %>%
+  head(15) %>%
+  ggplot(aes(x=sum,y=Auc1,fill=Auc1)) +
+  ggtitle("Top15 country of audience") +
+  geom_col(fill="gray70") +
+  geom_text(aes(label = perc))+
+  labs(x = "amount of data", y = "Audience.Country") +
+  scale_x_continuous(limits = c(NA, 330))
+  
+
+```
+
+
+![Leading countries based on Instagram audience size as of January 2022](https:\\www.statista.com\statistics\578364\countries-with-most-instagram-users\)
+
+****
+****
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+Ac_Asia <- subset(ig.nox, Ac.Continents == "Asia")
+Ac_Africa <- subset(ig.nox, Ac.Continents == "Africa")
+Ac_European <- subset(ig.nox, Ac.Continents == "European")
+Ac_NAmerica <- subset(ig.nox, Ac.Continents == "North-America")
+Ac_SAmerica <- subset(ig.nox, Ac.Continents == "South-America")
+
+Ac_int9 <- subset(ig.nox, Ac.internet == "90%-100%")
+Ac_int8 <- subset(ig.nox, Ac.internet == "80%-89%")
+Ac_int7 <- subset(ig.nox, Ac.internet == "70%-79%")
+Ac_int6 <- subset(ig.nox, Ac.internet == "60%-69%")
+Ac_int5 <- subset(ig.nox, Ac.internet == "0%-59%")
+
+Ac_VHH <- subset(ig.nox, Ac.HDI == "Very High HDI")
+Ac_HH <- subset(ig.nox, Ac.HDI == "High HDI")
+Ac_MH <- subset(ig.nox, Ac.HDI == "Medium HDI")
+
+Ca_CA <- ig.nox[grep("Cinema or Actors or actresses", ig.nox$Category),]
+Ca_Mu <- ig.nox[grep("Music", ig.nox$Category),]
+Ca_LS <- ig.nox[grep("Lifestyle", ig.nox$Category),]
+Ca_SB <- ig.nox[grep("Sports with a ball", ig.nox$Category),]
+Ca_Mo <- ig.nox[grep("Modeling", ig.nox$Category),]
+Ca_Sh <- ig.nox[grep("Shows", ig.nox$Category),]
+
+```
+
+****
+****
+
+#### - 亞洲地區追蹤人數與互動人數的關係
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+hchart(Ac_Asia,"scatter",hcaes(x=Followers.log, y=Authentic.engagement.log, group = Audience.Country))
+```
+######    **=> 追蹤人數高的觀眾國家皆為印度。**
+
+****
+****
+
+#### - 觀眾國家為印度追蹤人數與互動人數的關係
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+Ac_Asin <- subset(ig.nox, Audience.Country == "India")
+hchart(Ac_Asin,"scatter",hcaes(x=Followers.log, y=Authentic.engagement.log, group = Account))
+```
+###### - C羅(cristiano)(葡萄牙)在足球界舉世聞名，印度甚至在當地設立C羅的雕像，以此激勵當地年輕人。
+
+###### - 因印度最強的肌肉猛男達利普辛格成為摔角冠軍，有人說道他很像巨石強森(therock)(美國)，因此巨石強森在印度名聞遐邇。
+
+###### - 奧莉維亞·伊莎貝爾·羅德里戈(oliviarodrigo)(美國)，因於迪士尼頻道系列影集《Bizaardvark》中扮演Paige Olvera而聞名。
+
+###### - 贊恩･馬利克(zayn)(英國)發佈了個人首張專輯《心解密》，該專輯在當年多國歌曲排行版奪冠。
+
+###### - 卡特麗娜·卡芙(katrinakaif)(英國)印度裔英國人，著名女演員和模特兒，主要影片出自寶萊塢。印度孟買有著電影工業基地的別名。
+
+###### **--> 此圖可知，在印度地區獲得許多追蹤數的演員，通常都是跟印度本身有關聯的事件，又或者是受到世界的影響，如：風靡全球的歌曲或影劇或大事件等等。**
+
+######    **=> 這張圖中我們會選擇卡特麗娜·卡芙。**
+
+****
+****
+
+#### - 和臺灣相似國家(亞洲、極高人類發展指數、網路普及度為90%-100%)追蹤人數與互動人數的關係
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+Ac_Asiast <- subset(ig.nox, Audience.Country == c("South Korea","Japan","Saudi Arabia"))
+hchart(Ac_Asiast,"scatter",hcaes(x=Followers.log, y=Authentic.engagement.log, group = Account))
+```
+###### - 鄭浩妍(hoooooyeony)(韓國)，因《魷魚遊戲》爆紅，被全國觀眾熟知。
+
+###### - 金泫雅(hyunah_aa)(韓國)，因出道曲《Hot Issue》爆紅及擔任《Gangnam Style》MV女主角，同樣因這首歌而成為眾人焦點。
+
+###### - 尹燦榮(yooncy1)(韓國)，飾演當紅韓劇-《殭屍校園》(2022.1.28上映並爆紅)、《魷魚遊戲》(2021.09.17上映)。
+
+###### **--> 此圖可了解韓劇與韓國流行歌曲在我們亞洲地區是非常具有影響力的，許多韓星都是利用韓劇和膾炙人口的歌曲來獲取知名度。人口發展指數極高(以健康長壽、教育獲得、生活水準去計算)的地方，網路相對地較普及，正是利用這些因素，來達到爆紅的效果。**
+
+######    **=> 這張圖中我們會選擇尹燦榮。**
+
+
+****
+****
+****
+
+### 各用戶類別探討(依演員為例)
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+lappend <- function (lst, ...){
+lst <- c(lst, list(...))
+  return(lst)
+}
+```
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+Ca_C <- subset(ig.nox, CategoryGroup==c("C","D","E") )
+
+
+Ca_Ct <- as.data.frame(Ca_C$Category)
+
+for(i in 1:nrow(Ca_Ct)){
+  Ca_Ct[i,]=as.character(Ca_Ct[i,])
+}
+
+Ca_Ct <- cbind(matrix(c(1:283),nrow=283,ncol=1),Ca_Ct)
+
+colnames(Ca_Ct) <- c("No","word")
+
+account <- Ca_C$Account
+nop <- Ca_Ct$No
+#分割
+Ca_Ct <- Ca_Ct %>% 
+  unnest_tokens(Ca_Ct1,word,token =function(t) str_split(t,"[;]"),to_lower = FALSE)
+```
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+Ccat_list = list()
+
+for(i in nop){
+  pr = subset(Ca_Ct, No==i)[2]
+  Ccat_list = lappend(Ccat_list, pr)
+  pr = c()
+}
+```
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+Ca_Ctd = c()
+
+for(i in 1:nrow(Ca_Ct)){
+  Ccat = unlist(Ccat_list[i])
+  Ca_Ctd = union(Ca_Ctd, Ccat)
+  Ccat = c()
+}
+
+```
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+n1=length(account)
+n2=length(Ca_Ctd)
+Ccm  <-  matrix(0, nrow = n1, ncol = n2)
+for(Ccat in 1:n2){
+  for(i in 1:n1){
+    if(grepl(Ca_Ctd[Ccat], Ccat_list[[i]])==TRUE){
+      Ccm[i, Ccat]=1
+    }
+  }
+}
+rownames(Ccm) = account
+colnames(Ccm) = Ca_Ctd
+Ccm = as.data.frame(Ccm)
+Ccmt=t(Ccm)
+```
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+Cmds <- Ccmt %>%
+  dist(Ccmt, method="jaccard") %>%          
+  cmdscale() %>%
+  as_tibble()
+colnames(Cmds) <- c("Dim.1", "Dim.2")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+Cmds_high = cbind(Cmds, Ca_Ctd)
+colnames(Cmds_high)=c("Dim.1", "Dim.2", "label")
+hchart(Cmds_high, "scatter", hcaes(x=Dim.1, y=Dim.2, group=label),main="MDS of categories that deleting some things")
+```
+
+****
+****
+
+#### - 不同地區演員追蹤人數與互動人數的關係 
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+hchart(Ca_CA,"scatter",hcaes(x=Followers.log, y=Authentic.engagement.log, group = Ac.Continents))
+```
+
+****
+****
+
+#### - 網路普及度為90%-100%地區演員追蹤人數與互動人數的關係 
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+Ca_CA9 <- subset(Ca_CA, Ac.internet == "90%-100%") 
+hchart(Ca_CA9,"scatter",hcaes(x=Followers.log, y=Authentic.engagement.log, group = Account))
+```
+###### - 黃仁燁(hi_high_hiy)(韓國)因出演《女神降臨》(該劇2020.12.09韓國上映，隔年12月才對外播放)，(2022.01)爆紅，使IG粉絲暴增300萬，連原著都被圈粉。
+
+###### - 湯姆·霍蘭德(tomholland2013)(英國)憑藉於倫敦維多利亞皇宮劇院的音樂劇《舞動人生音樂劇》中扮演主角比利·艾略特而成名。
+
+###### - 千黛亞(zendaya)(美國)飾演《舞動青春》角小琪·布魯（Rocky Blue）並成功爆紅。
+
+###### - 阿蒂雅·謝緹(印度)，出道作品是電影《Hero》並獲得印度電影觀眾獎最佳女新人的提名。
+
+###### **--> 此圖發現大多明星都是出演了男女主角的位置，許多人因為聽到新聞又或者從社群媒體還有影劇裡得知，一旦爆紅，即透過網路，消息很快就傳到了全世界，造成風靡全球的火熱度來打造自身知名度。**
+
+######    **=> 這張圖中我們會選擇黃仁燁。**
+
+
+
+****
+****
+
+#### - 極高人類發展指數地區演員追蹤人數與互動人數的關係 
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+Ca_CAVA <- subset(Ca_CA, Ac.HDI == "Very High HDI") 
+hchart(Ca_CAVA,"scatter",hcaes(x=Followers.log, y=Authentic.engagement.log, group = Account))
+```
+###### **--> 和上圖很像的原因是人口發展指數極高(以健康長壽、教育獲得、生活水準去計算)的地方，網路相對地較普及，所以結果幾乎一樣。**
+
+######    **=> 這張圖中我們會選擇黃仁燁。**
+
+****
+****
+
+#### - 亞洲演員追蹤人數與互動人數的關係 
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+Ca_CAas <- subset(Ca_CA, Ac.Continents == "Asia") 
+hchart(Ca_CAas,"scatter",hcaes(x=Followers.log, y=Authentic.engagement.log, group = Account))
+```
+###### - 黃仁燁(hi_high_hiy)(韓國)因出演《女神降臨》(該劇2020.12.09韓國上映，隔年12月才對外播放)，(2022.01)爆紅，使IG粉絲暴增300萬，連原著都被圈粉。
+
+###### - 因印度最強的肌肉猛男達利普辛格成為摔角冠軍，有人說道他很像巨石強森(therock)(美國)，因此巨石強森在印度名聞遐邇。
+
+###### - 奧莉維亞·伊莎貝爾·羅德里戈(oliviarodrigo)(美國)，因於迪士尼頻道系列影集《Bizaardvark》中扮演Paige Olvera而聞名。
+
+######    **=> 這張圖中我們會選擇黃仁燁。**
+
+
+****
+****
+
+#### - 極高人類發展指數亞洲演員追蹤人數與互動人數的關係 
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+Ca_CAVAA <- subset(Ca_CAVA, Ac.Continents == "Asia") 
+hchart(Ca_CAVAA,"scatter",hcaes(x=Followers.log, y=Authentic.engagement.log, group = Account))
+```
+
+###### - 艾斯特·愛珀斯托(ester-exposito)(西班牙)最出名的作品是在Netflix影集《菁英殺機》中飾演Carla Rosón Caleruega 。
+
+###### - 漢德埃賽爾(土耳其)19歲當選小姐，演出《愛的詮釋》爆紅，至今在Instagram上粉絲已經衝破1700萬，是土耳其非常炙手可熱的人氣女星。
+###### - 黃仁燁(hi_high_hiy)(韓國)因出演《女神降臨》(該劇2020.12.09韓國上映，隔年12月才對外播放)，(2022.01)爆紅，使IG粉絲暴增300萬，連原著都被圈粉。
+
+###### **--> 透過此圖，由此而知，利用網路的普遍性網路爆紅的明星數不勝數。**
+
+######    **=> 這張圖中我們會選擇黃仁燁。**
+
+****
+
+#### - 和臺灣相似國家(亞洲、極高人類發展指數、網路普及度為90%-100%)演員追蹤人數與互動人數的關係 
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+Ca_CAas9 <- subset(Ca_CAas, Ac.internet == "90%-100%") 
+hchart(Ca_CAas9,"scatter",hcaes(x=Followers.log, y=Authentic.engagement.log, group = Account))
+```
+
+###### - 德米特·奧茲德米爾(demetozdemir)(土耳其)。她在歷史劇《Kurt Seit and Shura》裡扮演了一位俄羅斯貴族 - 阿麗娜·索科洛娃。從這一刻，她的女主角也越來越有魅力。
+
+###### - 山崎賢人(kentooyamazaki)(日本)為男演員兼模特兒。
+
+###### - 李光洙(masijacoke850714)(韓國)為著名男演員、主持和模特，曾是韓國綜藝節目《Running Man》固定班底。
+
+###### - 黃仁燁(hi_high_hiy)(韓國)因出演《女神降臨》，使IG粉絲暴增300萬，連原著都被圈粉。
+
+###### - 渡邊直美(watanabenaomi703)(日本)作為美國女歌手碧昂斯的狂熱粉絲，她在節目裡表演了對《Crazy in Love》等的模仿。因此她獲得了「日版碧昂斯」、「ブヨンセ」[a]、「吉本碧昂斯」等暱稱。
+
+###### **--> 在亞洲地區，會發現因地區關係，追縱數較多都是韓國、日本明星居多，反觀亞洲地區外的明星，在亞州地區話，會稍遜色不少。**
+
+######    **=> 這張圖中我們會選擇山崎賢人。**
+
+****
+****
+****
+
+## **結論**
+
+- 全球各地區域爆紅自媒體皆不盡相同，因此實驗以區域做切割，探究如歐美與亞洲分別尋找最佳形象代言人。
+
+- 無論正負評論之代言人，因其流量較高，即可帶來高流量，增加商品曝光度，而產生高效益的回饋。
+
+- 透過以上兩者的關鍵分析，找出以較少的成本獲取相同的利益。
+
+
+    **=> 選擇用戶來做商業代演達高CP值，不能只看用戶追蹤人數和互動人數，而是要做客製化或更細膩的分類，比如說觀眾國家(用戶市場)、用戶類別，不同類型。**
+
+****
+
+## **參考文獻**
+
+1.	[Top 1000 Instagram Influencers](https://www.kaggle.com/datasets/prasertk/top-1000-instagram-influencers)
+2.	[Welcome to Text Mining with R | Text Mining with R](https://www.tidytextmining.com/index.html)
+3.	[Notes for “Text Mining with R](https://bookdown.org/Maxine/tidy-text-mining/])
